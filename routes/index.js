@@ -19,7 +19,7 @@ router.get('/', function(req, res, next) {
 			posts: posts,
 			page: page,
 			isFirstPage: (page - 1) == 0,
-			isLastPage: ((page - 1) * 2 + posts.length) == total,
+			isLastPage: ((page - 1) * 10 + posts.length) == total,
 			user: req.session.user,
 			success: req.flash("success").toString(),
 			error: req.flash("error").toString()
@@ -125,7 +125,7 @@ router.post('/post', checkLogin);
 router.post('/post', function(req, res, next) {
 	var currentUser = req.session.user;
 	var tags = [req.body.tag1, req.body.tag2, req.body.tag3];
-	var post = new Post(currentUser.name, req.body.title, tags, req.body.post);
+	var post = new Post(currentUser.name, currentUser.head, req.body.title, tags, req.body.post);
 	post.save(function(err) {
 		if(err) {
 			req.flash('error', err);
@@ -202,6 +202,29 @@ router.get('/tags/:tag', function(req, res, next) {
 		});
 	});
 });
+router.get('/links', function(req, res, next) {
+	res.render('links', {
+		title: "友情链接",
+		user: req.session.user,
+		success: req.flash('success').toString(),
+		error: req.flash('error').toString()
+	});
+});
+router.get('/search', function(req, res, next) {
+	Post.search(req.query.keyword, function(err, posts) {
+		if(err) {
+			req.flash('error', err);
+			return res.redirect('/');
+		}
+		res.render('search', {
+			title: "搜索: " + req.query.keyword,
+			posts: posts,
+			user: req.session.user,
+			success: req.flash('success').toString(),
+			error: req.flash('error').toString()
+		});
+	});
+});
 router.get('/u/:name', function(req, res, next) {
 	var page = req.query.p ? parseInt(req.query.p) : 1;
 	//检查用户是否存在
@@ -221,7 +244,7 @@ router.get('/u/:name', function(req, res, next) {
 				posts: posts,
 				page: page,
 				isFirstPage: (page - 1) == 0,
-				isLastPage: ((page - 1) * 2 + posts.length) == total,
+				isLastPage: ((page - 1) * 10 + posts.length) == total,
 				user: req.session.user,
 				success: req.flash('success').toString(),
 				error: req.flash('error').toString()
@@ -235,21 +258,30 @@ router.get('/u/:name/:day/:title', function(req, res, next) {
 			req.flash('error', err);
 			return res.redirect('/');
 		}
-		res.render('article', {
-			title: req.params.title,
-			post: post,
-			user: req.session.user,
-			success: req.flash('success').toString(),
-			error: req.flash('error').toString()
-		});
+		if(post) {
+			res.render('article', {
+				title: req.params.title,
+				post: post,
+				user: req.session.user,
+				success: req.flash('success').toString(),
+				error: req.flash('error').toString()
+			});
+		}else {
+			res.render('404');
+		}
+		
 	});
 });
 
 router.post('/u/:name/:day/:title', function(req, res) {
 	var date = new Date();
 	var time = date.getFullYear() + "-" + (date.getMonth() + 1) + "-" + date.getDate() + " " + date.getHours() + ":" + (date.getMinutes() < 10 ? '0' + date.getMinutes() : date.getMinutes());
+	var md5 = crypto.createHash('md5');
+	var email_MD5 = md5.update(req.body.email.toLowerCase()).digest('hex');
+	var head = "http://www.gravatar.com/avatar/" + email_MD5 + "?s=48";
 	var comment = {
 		name: req.body.name,
+		head: head,
 		email: req.body.email,
 		website: req.body.website,
 		time: time,
@@ -305,6 +337,36 @@ router.get('/remove/:name/:day/:title', function(req, res, next) {
 		}
 		req.flash("success", "删除成功！");
 		res.redirect('/');
+	});
+});
+router.get('/reprint/:name/:day/:title', checkLogin);
+router.get('/reprint/:name/:day/:title', function(req, res, next) {
+	Post.edit(req.params.name, req.params.day, req.params.title, function(err, post) {
+		if(err) {
+			req.flash('error', err);
+			return res.redirect('back');
+		}
+		var currentUser = req.session.user;
+		var reprint_from = {
+			name: post.name,
+			day: post.time.day,
+			title: post.title
+		};
+		var reprint_to = {
+			name: currentUser.name, 
+			head: currentUser.head
+		}
+		Post.reprint(reprint_from, reprint_to, function(err, post) {
+			if(err) {
+				req.flash('error', err);
+				return res.redirect('back');
+			}
+			req.flash('success', '转载成功！');
+
+			var url = encodeURI('/u/' + post.name + '/' + post.time.day + '/' + post.title);
+			//跳转到转载后的文章页面
+			res.redirect(url);
+		});
 	});
 });
 

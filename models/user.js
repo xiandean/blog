@@ -1,5 +1,5 @@
 var mongodb = require("./db");
-
+var crypto = require('crypto');
 function User(user) {
 	this.name = user.name;
 	this.password = user.password;
@@ -10,11 +10,15 @@ module.exports = User;
 
 //储存用户信息
 User.prototype.save = function(callback) {
+	var md5 = crypto.createHash('md5');
+	var email_MD5 = md5.update(this.email.toLowerCase()).digest('hex');
+	var head = "http://www.gravatar.com/avatar/" + email_MD5 + "?s=48";
 	//要存入数据库的用户文档
 	var user = {
 		name: this.name,
 		password: this.password,
-		email: this.email
+		email: this.email,
+		head: head
 	};
 	//打开数据库
 	mongodb.open(function(err, db) {
@@ -34,7 +38,7 @@ User.prototype.save = function(callback) {
 				if(err) {
 					return callback(err);
 				}
-				callback(null, user[0]);//成功！err 为 null，并返回存储后的用户文档
+				callback(null, user.ops[0]);//成功！err 为 null，并返回存储后的用户文档
 			});
 		});
 	});
